@@ -64,9 +64,10 @@ jobs:
             "build-tools;31.0.0" \
             "ndk;23.1.7779620"
 
-          echo "export ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "export ANDROIDNDK=$HOME/android-sdk/ndk/23.1.7779620" >> $GITHUB_ENV
-          echo "export PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
+          echo "ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROIDNDK=$HOME/android-sdk/ndk/23.1.7779620" >> $GITHUB_ENV
+          echo "PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
+
 
 
       - name: Generate buildozer.spec
