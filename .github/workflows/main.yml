@@ -38,13 +38,28 @@ jobs:
             zlib1g-dev \
             libbz2-dev \
             libncurses5-dev \
-            libncursesw5-dev
+            libncursesw5-dev \
+            wget
 
       - name: Install Buildozer
         run: |
           python3 -m pip install --upgrade pip
           pip install cython
           pip install buildozer
+
+      - name: Install Android SDK & NDK
+        run: |
+          mkdir -p $HOME/android-sdk
+          cd $HOME/android-sdk
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+          unzip cmdline-tools.zip -d cmdline-tools
+          mkdir -p cmdline-tools/latest
+          mv cmdline-tools/cmdline-tools/* cmdline-tools/latest/
+          yes | cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-31" "build-tools;31.0.0" "ndk;23.1.7779620"
+
+          echo "export ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "export ANDROIDNDK=$HOME/android-sdk/ndk/23.1.7779620" >> $GITHUB_ENV
+          echo "export PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
 
       - name: Generate buildozer.spec
         run: |
@@ -57,6 +72,7 @@ jobs:
 
       - name: Build APK
         run: |
+          source $GITHUB_ENV
           buildozer android debug
 
       - name: Upload APK artifact
