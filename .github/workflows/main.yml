@@ -1,4 +1,4 @@
-name: Build APK with P4A
+name: Build APK Simple
 on:
   push:
     branches: [ main ]
@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     
     steps:
       - name: Checkout
@@ -17,32 +17,73 @@ jobs:
         with:
           python-version: '3.8'
           
-      - name: Install dependencies
+      - name: Install everything we need
         run: |
-          sudo apt update
-          sudo apt install -y openjdk-8-jdk build-essential ccache git python3-dev python3-pip libncurses5:i386 libstdc++6:i386 zlib1g:i386 openjdk-8-jdk unzip ant ccache autoconf libtool
-          pip install --upgrade pip
-          pip install python-for-android
-          pip install kivy cython
+          # تحديث النظام
+          sudo apt-get update
           
-      - name: Setup Android SDK
+          # تثبيت Java 8
+          sudo apt-get install -y openjdk-8-jdk
+          
+          # تثبيت أدوات البناء
+          sudo apt-get install -y build-essential git zip unzip
+          sudo apt-get install -y python3-dev zlib1g-dev libncurses5-dev
+          sudo apt-get install -y libffi-dev libssl-dev autoconf libtool
+          
+          # تثبيت Python packages
+          pip install --upgrade pip
+          pip install cython==0.29.33
+          pip install python-for-android
+          pip install kivy
+          
+      - name: Create simple icon
         run: |
-          mkdir android-sdk
-          cd android-sdk
+          sudo apt-get install -y imagemagick
+          convert -size 512x512 xc:"#FF1493" -pointsize 200 -gravity center \
+                  -fill white -annotate +0+0 "♥" icon.png
+                  
+      - name: Setup Android environment
+        run: |
+          # تحميل Android SDK
           wget https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip
           unzip sdk-tools-linux-4333796.zip
+          export ANDROID_HOME=$PWD/tools
+          
+          # تحميل NDK
+          wget https://dl.google.com/android/repository/android-ndk-r21b-linux-x86_64.zip
+          unzip android-ndk-r21b-linux-x86_64.zip
+          export ANDROID_NDK_HOME=$PWD/android-ndk-r21b
+          
+          # قبول الرخص وتثبيت المكونات
           yes | tools/bin/sdkmanager --licenses
           tools/bin/sdkmanager "platforms;android-30" "build-tools;30.0.3"
-          echo "ANDROID_HOME=$PWD" >> $GITHUB_ENV
-          echo "PATH=$PWD/tools/bin:$PATH" >> $GITHUB_ENV
           
-      - name: Build APK
+          # حفظ متغيرات البيئة
+          echo "ANDROID_HOME=$PWD/tools" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r21b" >> $GITHUB_ENV
+          echo "JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $GITHUB_ENV
+          
+      - name: Build APK with python-for-android
         run: |
-          export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
-          p4a create --private . --package=org.pegol.lovemum --name="LoveMum" --version=1.0 --bootstrap=sdl2 --requirements=python3,kivy --arch=arm64-v8a --permission INTERNET
+          # إعداد المشروع
+          p4a create --private . \
+             --package=org.pegol.lovemum \
+             --name="LoveMum" \
+             --version=1.0 \
+             --bootstrap=sdl2 \
+             --requirements=python3,kivy \
+             --arch=arm64-v8a \
+             --permission INTERNET \
+             --icon=icon.png \
+             --orientation=portrait
+             
+      - name: Find and upload APK
+        run: |
+          echo "=== البحث عن ملفات APK ==="
+          find . -name "*.apk" -type f
           
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: LoveMum-APK
-          path: "dist/*.apk"
+          path: "**/*.apk"
