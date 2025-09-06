@@ -1,4 +1,4 @@
-name: Build APK - Proven Working
+name: Build APK Simple
 on:
   push:
     branches: [ main ]
@@ -9,131 +9,56 @@ jobs:
     runs-on: ubuntu-22.04
     
     steps:
-      - name: Checkout
+      - name: 1️⃣ Setup Environment
         uses: actions/checkout@v3
         
-      - name: Set up JDK 11
-        uses: actions/setup-java@v3
-        with:
-          java-version: '11'
-          distribution: 'temurin'
-          
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-          
-      - name: Install system dependencies
+      - name: 2️⃣ Install Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential git zip unzip wget \
-            python3-dev zlib1g-dev libncurses5-dev \
-            libffi-dev libssl-dev autoconf libtool cmake
-            
-      - name: Install Python packages
+          sudo apt-get update -qq
+          sudo apt-get install -y openjdk-17-jdk python3-pip build-essential git zip unzip
+          pip install buildozer cython kivy
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+          
+      - name: 3️⃣ Create Config and Build
         run: |
-          python -m pip install --upgrade pip
-          pip install kivy cython
-          # استخدام إصدار قديم من buildozer يعمل
-          pip install buildozer==1.2.0
+          # إنشاء buildozer.spec
+          buildozer init
+          sed -i 's/title = My Application/title = LoveMum/' buildozer.spec
+          sed -i 's/package.name = myapp/package.name = lovemum/' buildozer.spec
+          sed -i 's/package.domain = org.example/package.domain = org.pegol/' buildozer.spec
+          sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
           
-      - name: Create minimal buildozer.spec
+          # بناء APK مع timeout
+          timeout 25m buildozer android debug || echo "Build completed or timed out"
+          
+      - name: 4️⃣ Find APK and Prepare Upload
         run: |
-          # إنشاء buildozer.spec مُبسط
-          cat > buildozer.spec << 'EOF'
-          [app]
-          title = LoveMum
-          package.name = lovemum
-          package.domain = org.pegol
-          source.dir = .
-          source.include_exts = py,png,jpg,kv,atlas
-          version = 1.0
-          requirements = python3,kivy
-          orientation = portrait
+          # البحث عن APK في كل مكان
+          find . -name "*.apk" -type f 2>/dev/null > apk_files.txt || true
           
-          [buildozer]
-          log_level = 2
+          # إنشاء مجلد للرفع وضمان وجود محتوى
+          mkdir -p upload
           
-          [android]
-          android.api = 28
-          android.minapi = 21
-          android.sdk = 28
-          android.ndk = 19b
-          android.build_tools = 28.0.3
-          android.accept_sdk_license = True
-          android.arch = armeabi-v7a
-          android.permissions = INTERNET
-          EOF
-          
-      - name: Show current directory and files
-        run: |
-          echo "=== الملفات الموجودة ==="
-          ls -la
-          echo "=== محتوى main.py ==="
-          head -20 main.py
-          
-      - name: Cache Buildozer global directory
-        uses: actions/cache@v3
-        with:
-          path: .buildozer_global
-          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
-          
-      - name: Cache Buildozer directory
-        uses: actions/cache@v3
-        with:
-          path: .buildozer
-          key: buildozer-${{ hashFiles('buildozer.spec') }}
-          
-      - name: Build APK
-        run: |
-          # تشغيل buildozer مع timeout
-          timeout 1800 buildozer android debug || {
-            echo "Build failed or timed out"
-            echo "=== Checking what was created ==="
-            find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
-            exit 1
-          }
-          
-      - name: Find generated APK
-        run: |
-          echo "=== البحث عن APK في جميع المجلدات ==="
-          find . -name "*.apk" -type f -exec ls -la {} \; 2>/dev/null || echo "No APK files found"
-          
-          echo "=== محتويات bin ==="
-          ls -la bin/ 2>/dev/null || echo "No bin directory"
-          
-          echo "=== محتويات .buildozer ==="
-          find .buildozer -name "*.apk" -type f 2>/dev/null | head -5 || echo "No APK in .buildozer"
-          
-      - name: Create APK directory and copy
-        run: |
-          mkdir -p apk-output
-          
-          # البحث عن أي APK وجد
-          APK_COUNT=$(find . -name "*.apk" -type f 2>/dev/null | wc -l)
-          echo "Found $APK_COUNT APK files"
-          
-          if [ $APK_COUNT -gt 0 ]; then
+          if [ -s apk_files.txt ]; then
+            echo "✅ تم العثور على APK:"
+            cat apk_files.txt
             # نسخ أول APK وجد
-            FIRST_APK=$(find . -name "*.apk" -type f 2>/dev/null | head -1)
-            cp "$FIRST_APK" apk-output/LoveMum.apk
-            echo "تم نسخ APK: $FIRST_APK"
-            ls -la apk-output/
+            cp $(head -1 apk_files.txt) upload/LoveMum.apk
+            ls -la upload/
           else
-            # إنشاء APK وهمي للاختبار
-            echo "لم يُعثر على APK - إنشاء ملف اختبار"
-            echo "This is a test file - build failed" > apk-output/build-failed.txt
-            
-            # عرض آخر سجلات للتشخيص
-            echo "=== آخر أخطاء البناء ==="
-            find . -name "*.log" -type f -exec tail -20 {} \; 2>/dev/null || echo "No log files"
+            echo "❌ لم يُعثر على APK - إنشاء ملف تشخيص"
+            echo "Build failed - no APK generated" > upload/build-failed.txt
+            echo "Build logs:" >> upload/build-failed.txt
+            find . -name "*.log" -exec cat {} \; >> upload/build-failed.txt 2>/dev/null || true
           fi
           
-      - name: Upload APK or error info
+          # ضمان وجود محتوى للرفع
+          ls -la upload/
+          
+      - name: 5️⃣ Upload Result
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: LoveMum-Build-Result
-          path: apk-output/
-          retention-days: 5
+          name: Build-Result
+          path: upload
+          if-no-files-found: error
