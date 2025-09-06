@@ -42,14 +42,10 @@ jobs:
           android.orientation = portrait
           EOF
           
-      - name: Create placeholder images
+      - name: Show files before build
         run: |
-          # إنشاء أيقونة وشاشة بداية بسيطة
-          sudo apt-get update && sudo apt-get install -y imagemagick
-          convert -size 512x512 xc:"#FF69B4" -pointsize 72 -gravity center \
-                  -fill white -annotate +0+0 "♥" icon.png
-          convert -size 1024x1024 xc:"#FF1493" -pointsize 120 -gravity center \
-                  -fill white -annotate +0+0 "Love\nMum" presplash.png
+          echo "Files in project:"
+          ls -la
                   
       - name: Build APK with Docker
         run: |
