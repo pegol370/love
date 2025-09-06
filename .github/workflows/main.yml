@@ -1,4 +1,4 @@
-name: Build APK Simple
+name: Build APK with Buildozer Action
 on:
   push:
     branches: [ main ]
@@ -6,59 +6,21 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     
     steps:
-      - name: 1️⃣ Setup Environment
+      - name: 📥 Checkout
         uses: actions/checkout@v3
         
-      - name: 2️⃣ Install Dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y openjdk-17-jdk python3-pip build-essential git zip unzip
-          pip install buildozer cython kivy
-          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
-          
-      - name: 3️⃣ Create Config and Build
-        run: |
-          # إنشاء buildozer.spec
-          buildozer init
-          sed -i 's/title = My Application/title = LoveMum/' buildozer.spec
-          sed -i 's/package.name = myapp/package.name = lovemum/' buildozer.spec
-          sed -i 's/package.domain = org.example/package.domain = org.pegol/' buildozer.spec
-          sed -i 's/#android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
-          
-          # بناء APK مع timeout
-          timeout 25m buildozer android debug || echo "Build completed or timed out"
-          
-      - name: 4️⃣ Find APK and Prepare Upload
-        run: |
-          # البحث عن APK في كل مكان
-          find . -name "*.apk" -type f 2>/dev/null > apk_files.txt || true
-          
-          # إنشاء مجلد للرفع وضمان وجود محتوى
-          mkdir -p upload
-          
-          if [ -s apk_files.txt ]; then
-            echo "✅ تم العثور على APK:"
-            cat apk_files.txt
-            # نسخ أول APK وجد
-            cp $(head -1 apk_files.txt) upload/LoveMum.apk
-            ls -la upload/
-          else
-            echo "❌ لم يُعثر على APK - إنشاء ملف تشخيص"
-            echo "Build failed - no APK generated" > upload/build-failed.txt
-            echo "Build logs:" >> upload/build-failed.txt
-            find . -name "*.log" -exec cat {} \; >> upload/build-failed.txt 2>/dev/null || true
-          fi
-          
-          # ضمان وجود محتوى للرفع
-          ls -la upload/
-          
-      - name: 5️⃣ Upload Result
-        uses: actions/upload-artifact@v4
-        if: always()
+      - name: 🔧 Build APK
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
         with:
-          name: Build-Result
-          path: upload
-          if-no-files-found: error
+          workdir: ./
+          buildozer_version: stable
+          
+      - name: 📤 Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LoveMum-APK
+          path: ${{ steps.buildozer.outputs.filename }}
