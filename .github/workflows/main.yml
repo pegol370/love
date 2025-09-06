@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     
     steps:
       - name: Checkout
@@ -26,46 +26,54 @@ jobs:
           sudo apt-get install -y openjdk-8-jdk
           
           # تثبيت أدوات البناء
-          sudo apt-get install -y build-essential git zip unzip
+          sudo apt-get install -y build-essential git zip unzip wget
           sudo apt-get install -y python3-dev zlib1g-dev libncurses5-dev
           sudo apt-get install -y libffi-dev libssl-dev autoconf libtool
+          sudo apt-get install -y ccache pkg-config cmake
           
           # تثبيت Python packages
-          pip install --upgrade pip
+          pip install --upgrade pip setuptools wheel
           pip install cython==0.29.33
           pip install python-for-android
           pip install kivy
           
-      - name: Create simple icon
-        run: |
-          sudo apt-get install -y imagemagick
-          convert -size 512x512 xc:"#FF1493" -pointsize 200 -gravity center \
-                  -fill white -annotate +0+0 "♥" icon.png
-                  
       - name: Setup Android environment
         run: |
           # تحميل Android SDK
-          wget https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip
-          unzip sdk-tools-linux-4333796.zip
-          export ANDROID_HOME=$PWD/tools
+          wget -q https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip
+          unzip -q sdk-tools-linux-4333796.zip
           
           # تحميل NDK
-          wget https://dl.google.com/android/repository/android-ndk-r21b-linux-x86_64.zip
-          unzip android-ndk-r21b-linux-x86_64.zip
+          wget -q https://dl.google.com/android/repository/android-ndk-r21b-linux-x86_64.zip
+          unzip -q android-ndk-r21b-linux-x86_64.zip
+          
+          # إعداد متغيرات البيئة
+          export ANDROID_HOME=$PWD/tools
           export ANDROID_NDK_HOME=$PWD/android-ndk-r21b
+          export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
           
-          # قبول الرخص وتثبيت المكونات
+          # قبول الرخص
           yes | tools/bin/sdkmanager --licenses
-          tools/bin/sdkmanager "platforms;android-30" "build-tools;30.0.3"
           
-          # حفظ متغيرات البيئة
+          # تثبيت المكونات
+          tools/bin/sdkmanager "platforms;android-30"
+          tools/bin/sdkmanager "build-tools;30.0.3"
+          tools/bin/sdkmanager "platform-tools"
+          
+          # حفظ متغيرات البيئة للخطوات التالية
           echo "ANDROID_HOME=$PWD/tools" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$PWD/android-ndk-r21b" >> $GITHUB_ENV
           echo "JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $GITHUB_ENV
+          echo "PATH=$PWD/tools/bin:$PWD/tools/platform-tools:$PATH" >> $GITHUB_ENV
           
       - name: Build APK with python-for-android
         run: |
-          # إعداد المشروع
+          # التحقق من متغيرات البيئة
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
+          echo "JAVA_HOME: $JAVA_HOME"
+          
+          # بناء APK بدون أيقونة مخصصة
           p4a create --private . \
              --package=org.pegol.lovemum \
              --name="LoveMum" \
@@ -74,16 +82,20 @@ jobs:
              --requirements=python3,kivy \
              --arch=arm64-v8a \
              --permission INTERNET \
-             --icon=icon.png \
              --orientation=portrait
              
-      - name: Find and upload APK
+      - name: Find APK files
         run: |
           echo "=== البحث عن ملفات APK ==="
-          find . -name "*.apk" -type f
+          find . -name "*.apk" -type f -exec ls -la {} \;
+          echo "=== محتويات المجلد الحالي ==="
+          ls -la
           
       - name: Upload APK
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: LoveMum-APK
-          path: "**/*.apk"
+          path: |
+            **/*.apk
+            dist/*.apk
