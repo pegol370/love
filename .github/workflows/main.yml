@@ -1,5 +1,4 @@
 name: Build APK
-
 on:
   push:
     branches: [ main ]
@@ -8,16 +7,16 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
+        
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
+          
       - name: Install system dependencies
         run: |
           sudo apt update
@@ -39,53 +38,106 @@ jobs:
             libbz2-dev \
             libncurses5-dev \
             libncursesw5-dev \
-            wget
-
-      - name: Install Buildozer
+            libtinfo5 \
+            cmake \
+            libltdl-dev \
+            wget \
+            autoconf \
+            libtool \
+            pkg-config
+            
+      - name: Install Python dependencies
         run: |
           python3 -m pip install --upgrade pip
-          pip install cython
+          pip install cython==0.29.33
           pip install buildozer
-
-      - name: Install Android SDK & NDK
+          pip install kivy
+          
+      - name: Setup Android SDK environment
         run: |
-          mkdir -p $HOME/android-sdk
-          cd $HOME/android-sdk
+          # إعداد مجلدات SDK
+          mkdir -p $HOME/.buildozer/android/platform
+          cd $HOME/.buildozer/android/platform
+          
+          # تحميل Android SDK
           wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip -d cmdline-tools
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/cmdline-tools/* cmdline-tools/latest/
-
-          yes | cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
-
-          yes | cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk \
-            "platform-tools" \
-            "platforms;android-31" \
-            "build-tools;31.0.0" \
-            "ndk;23.1.7779620"
-
-          echo "ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROIDNDK=$HOME/android-sdk/ndk/23.1.7779620" >> $GITHUB_ENV
-          echo "PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
-
-
-
-      - name: Generate buildozer.spec
+          unzip -q cmdline-tools.zip
+          mkdir -p android-sdk/cmdline-tools
+          mv cmdline-tools android-sdk/cmdline-tools/latest
+          
+          # تحميل Android NDK
+          wget https://dl.google.com/android/repository/android-ndk-r23c-linux.zip -O ndk.zip
+          unzip -q ndk.zip
+          mv android-ndk-r23c android-ndk-r23c
+          
+          # إعداد متغيرات البيئة
+          echo "ANDROIDSDK=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
+          echo "ANDROIDNDK=$HOME/.buildozer/android/platform/android-ndk-r23c" >> $GITHUB_ENV
+          echo "ANDROIDAPI=31" >> $GITHUB_ENV
+          echo "ANDROIDMINAPI=21" >> $GITHUB_ENV
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+          
+      - name: Accept Android licenses
         run: |
-          buildozer init
-          sed -i 's/title =.*/title = LoveMum/' buildozer.spec
-          sed -i 's/package.name =.*/package.name = lovemum/' buildozer.spec
-          sed -i 's/package.domain =.*/package.domain = org.pegol/' buildozer.spec
-          sed -i 's/requirements =.*/requirements = python3,kivy/' buildozer.spec
-          sed -i 's/orientation =.*/orientation = portrait/' buildozer.spec
-
+          export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
+          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+          
+          # قبول جميع الرخص
+          yes | sdkmanager --licenses
+          
+          # تثبيت المكونات المطلوبة
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-31" 
+          sdkmanager "build-tools;31.0.0"
+          sdkmanager "ndk;23.1.7779620" || true
+          
+      - name: Create buildozer.spec
+        run: |
+          # إنشاء buildozer.spec مخصص
+          cat > buildozer.spec << 'EOF'
+          [app]
+          title = LoveMum
+          package.name = lovemum
+          package.domain = org.pegol
+          source.dir = .
+          source.include_exts = py,png,jpg,kv,atlas,json
+          version = 0.1
+          requirements = python3,kivy
+          [buildozer]
+          log_level = 2
+          [android]
+          android.api = 31
+          android.minapi = 21
+          android.sdk = 31
+          android.ndk = 23c
+          android.build_tools = 31.0.0
+          android.accept_sdk_license = True
+          android.arch = arm64-v8a
+          android.permissions = INTERNET
+          EOF
+          
       - name: Build APK
         run: |
-          source $GITHUB_ENV
+          # إعداد متغيرات البيئة للبناء
+          export ANDROIDSDK=$HOME/.buildozer/android/platform/android-sdk
+          export ANDROIDNDK=$HOME/.buildozer/android/platform/android-ndk-r23c
+          export ANDROIDAPI=31
+          export ANDROIDMINAPI=21
+          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+          export PATH=$ANDROIDSDK/platform-tools:$ANDROIDSDK/cmdline-tools/latest/bin:$PATH
+          
+          # تشغيل buildozer
           buildozer android debug
-
+          
+      - name: List generated files
+        run: |
+          echo "Files in bin directory:"
+          ls -la bin/ || echo "No bin directory found"
+          echo "Looking for APK files:"
+          find . -name "*.apk" -type f
+          
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: LoveMum-APK
-          path: bin/*.apk
+          path: "**/*.apk"
