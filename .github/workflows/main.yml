@@ -1,4 +1,4 @@
-name: Build APK with Buildozer Action
+name: Build APK Alternative
 on:
   push:
     branches: [ main ]
@@ -9,18 +9,34 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v3
         
-      - name: 🔧 Build APK
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
-        with:
-          workdir: ./
-          buildozer_version: stable
+      - name: Create buildozer.spec
+        run: |
+          cat > buildozer.spec << 'EOF'
+          [app]
+          title = LoveMum
+          package.name = lovemum
+          package.domain = org.pegol
+          source.dir = .
+          source.include_exts = py,png,jpg,kv,atlas
+          version = 1.0
+          requirements = python3,kivy
+          orientation = portrait
           
-      - name: 📤 Upload APK
+          [buildozer]
+          log_level = 2
+          
+          [android]
+          android.accept_sdk_license = True
+          EOF
+          
+      - name: Build with Buildozer Action
+        uses: digreatbrian/buildozer-action@main
+        
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: LoveMum-APK
-          path: ${{ steps.buildozer.outputs.filename }}
+          path: bin/*.apk
