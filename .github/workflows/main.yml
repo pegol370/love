@@ -1,4 +1,4 @@
-name: Build APK Ultimate
+name: Build APK Fixed
 on:
   push:
     branches: [ main ]
@@ -9,10 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout
+      - name: 📥 Checkout
         uses: actions/checkout@v3
         
-      - name: Create buildozer.spec
+      - name: 🔧 Create buildozer.spec in repo
         run: |
           cat > buildozer.spec << 'EOF'
           [app]
@@ -24,39 +24,35 @@ jobs:
           version = 1.0
           requirements = python3,kivy
           orientation = portrait
+          fullscreen = 0
           
           [buildozer]
           log_level = 2
           
           [android]
+          android.api = 30
+          android.minapi = 21
+          android.sdk = 30
+          android.ndk = 23b
+          android.build_tools = 30.0.3
           android.accept_sdk_license = True
-          android.arch = armeabi-v7a
+          android.arch = arm64-v8a
+          android.permissions = INTERNET
           EOF
           
-      - name: Build APK with Docker
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/home/user/hostcwd \
-            -e USER=$(id -u) -e GROUP=$(id -g) \
-            --platform linux/x86_64 \
-            registry.gitlab.com/kivymd/kivymd/buildozer:latest \
-            /bin/bash -c "
-              cd /home/user/hostcwd &&
-              sudo chown -R user:user . &&
-              buildozer android debug
-            "
-            
-      - name: List files and upload
-        run: |
-          echo "=== ملفات المشروع ==="
-          find . -name "*.apk" -o -name "bin" -type d
-          ls -la bin/ 2>/dev/null || echo "لا يوجد مجلد bin"
+      - name: 🏗️ Build APK
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          workdir: ./
+          buildozer_version: stable
           
-      - name: Upload APK
+      - name: 📤 Upload APK  
         uses: actions/upload-artifact@v4
-        if: always()  
+        if: always()
         with:
           name: LoveMum-APK
           path: |
-            bin/
+            bin/*.apk
+            ${{ steps.buildozer.outputs.filename }}
             **/*.apk
